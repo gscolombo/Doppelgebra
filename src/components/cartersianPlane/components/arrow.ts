@@ -24,7 +24,7 @@ export default class Axis {
         } else {
             path.rect(0, this.origin.y-height, 1, height);
             path.addPath(this.drawTip(0, this.origin.y));
-            path.addPath(this.drawMarkers(0, height, false));
+            path.addPath(this.drawMarkers(width, height, false));
         }
         this.ctx.fill(path);
         return path;
@@ -58,13 +58,12 @@ export default class Axis {
         } else {
             this.ctx.textAlign = 'right';
             let p = 1
-            for (let i = h/11; i <= this.origin.y; i += h/11) {
-                console.log(i)
+            for (let i = w/11; i <= this.origin.y; i += w/11) {
                 markers.rect(-5, i, 10, 1);
                 this.ctx.fillText(`${p++}`, -10, -i + 2.5, 16);
             }
             let q = -1
-            for (let i = -h/11; i >= -h; i -= h/11) {
+            for (let i = -w/11; i >= -h; i -= w/11) {
                 markers.rect(-5, i, 10, 1);
                 this.ctx.fillText(`${q--}`, -10, -i + 2.5, 16);
             }

@@ -18,11 +18,6 @@ export default class CartesianPlane {
         this.canvas.addEventListener('mousedown', this.canvasTranslation.bind(this));
     }
 
-    // updatePlane(newContext: CanvasRenderingContext2D) {
-    //     this.xaxis = new Axis(newContext);
-    //     this.yaxis = new Axis(newContext, false);
-    // }
-
     canvasTranslation(e: MouseEvent) {
         const refOrigin = {x: e.offsetX - this.origin.x - 0.5, y: e.offsetY - this.origin.y - 0.5};
         const abortControl = new AbortController();
