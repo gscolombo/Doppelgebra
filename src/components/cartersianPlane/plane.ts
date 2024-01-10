@@ -16,16 +16,22 @@ export default class CartesianPlane {
   constructor(canvasID: string) {
     this.canvas = document.getElementById(canvasID) as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d');
-    this.canvas.width = innerWidth;
-    this.canvas.height = innerHeight;
-    this.origin = {
-      x: this.canvas.width / 2,
-      y: this.canvas.height / 2,
+
+    const dpr = window.devicePixelRatio * 1;
+    const rect = this.canvas.getBoundingClientRect();
+
+    this.canvas.width = innerWidth * dpr;
+    this.canvas.height = innerHeight * dpr;
+    this.ctx.scale(dpr, dpr);
+    this.canvas.style.width = innerWidth + 'px';
+    this.canvas.style.height = innerHeight + 'px';
+
+    const startOrigin = {
+      x: this.canvas.width / (2 * dpr),
+      y: this.canvas.height / (2 * dpr),
     };
-    this.initialOrigin = {
-      x: this.canvas.width / 2,
-      y: this.canvas.height / 2,
-    };
+
+    this.origin = this.initialOrigin = startOrigin;
 
     this.initialRange = 5;
     this.range = {
@@ -34,31 +40,32 @@ export default class CartesianPlane {
     };
 
     this.scaleFactor = this.initialScaleFactor =
-      this.canvas.width / (this.initialRange * 2);
+      this.canvas.width / (this.initialRange * 2 * dpr);
 
     this.canvas.addEventListener('mousedown', this.translatePlane.bind(this));
     this.canvas.addEventListener('wheel', this.scalePlane.bind(this));
 
     // Initial draw
-    this.drawPlane();
+    requestAnimationFrame(this.drawPlane.bind(this));
   }
 
   drawPlane() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    this.drawAxes();
-    this.drawGrid(null, '#555', 1.0);
+    this.drawGrid(undefined, '#555', 1.0);
     this.drawGrid(5); // Subgrid
+    this.drawAxes();
     this.drawMarkers();
   }
 
   drawAxes() {
     // Origin marker
-    this.ctx.fillStyle = 'black';
+    this.ctx.fillStyle = 'rgba(0,0,0,1)';
     this.ctx.font = '16px Cambria Math';
     this.ctx.fillText('0', this.origin.x - 15, this.origin.y + 15);
 
-    this.ctx.strokeStyle = 'black';
+    this.ctx.strokeStyle = 'rgba(0,0,0,1)';
+    this.ctx.lineWidth = 1;
     this.ctx.beginPath();
     this.ctx.moveTo(0, this.origin.y);
     this.ctx.lineTo(this.canvas.width, this.origin.y);
@@ -93,24 +100,51 @@ export default class CartesianPlane {
     }
   }
 
+  getMarkerLabel(n: number, spacing: number, precision: number) {
+    let exponential: boolean;
+
+    // Set labels of big numbers to scientific notation
+    if (spacing >= 1) {
+      exponential =
+        spacing.toString().length >= 6 ||
+        n.toString().replace('-', '').length >= 6;
+      return exponential ? n.toExponential() : n.toFixed(precision);
+    }
+    return n.toFixed(precision);
+  }
+
   drawMarkers() {
-    const spacing =
+    let spacing =
       this.rangeMultiplier < 1
         ? Math.ceil(1 / this.rangeMultiplier)
         : 1 / this.rangeMultiplier;
 
     // Styling
-    this.ctx.fillStyle = 'black';
+    this.ctx.lineWidth = 3;
     this.ctx.font = '16px Cambria Math';
+    this.ctx.fillStyle = 'rgba(0,0,0,1)';
+    this.ctx.strokeStyle = 'rgba(255,255,255,1)';
 
-    const precision = spacing.toString().split('.')[1]?.length ?? 0;
+    const digits = spacing.toString();
+    const precision =
+      digits.split('.')[1]?.length ??
+      (spacing < 1 ? Math.floor(-Math.log10(spacing)) : 0);
 
     // X-axis labels
     for (let x = this.range.x.min; x <= this.range.x.max; x += spacing) {
       if (Math.abs(x) >= 10 ** -10) {
         const xPos = this.origin.x + x * this.scaleFactor;
+        const text = this.getMarkerLabel(x, spacing, precision);
+        const textWidth = this.ctx.measureText(text).width;
+        const renderParams = [
+          text,
+          xPos - textWidth / 2,
+          this.origin.y + 20,
+        ] as const;
+
         this.ctx.fillRect(xPos, this.origin.y - 5, 1, 10);
-        this.ctx.fillText(x.toFixed(precision), xPos - 5, this.origin.y + 20);
+        this.ctx.strokeText(...renderParams);
+        this.ctx.fillText(...renderParams);
       }
     }
 
@@ -118,12 +152,18 @@ export default class CartesianPlane {
     for (let y = this.range.y.max; y >= this.range.y.min; y -= spacing) {
       if (Math.abs(y) >= 10 ** -10) {
         const yPos = this.origin.y + y * this.scaleFactor;
+        const text = this.getMarkerLabel(-y, spacing, precision);
+        const textWidth = this.ctx.measureText(text).width;
+
+        const renderParams = [
+          text,
+          this.origin.x - textWidth - 10,
+          yPos + 5,
+        ] as const;
+
         this.ctx.fillRect(this.origin.x - 5, yPos, 10, 1);
-        this.ctx.fillText(
-          (-y).toFixed(precision),
-          this.origin.x - 20,
-          yPos + 5
-        );
+        this.ctx.strokeText(...renderParams);
+        this.ctx.fillText(...renderParams);
       }
     }
   }
@@ -137,6 +177,9 @@ export default class CartesianPlane {
         this.rangeMultiplier *= 2;
         if (Number.isInteger(magnitude)) {
           this.rangeMultiplier += 10 ** magnitude;
+          this.rangeMultiplier = Number(
+            this.rangeMultiplier.toFixed(Math.abs(magnitude))
+          );
         }
       }
       if (ratio < this.rangeMultiplier / 1.75) {
@@ -186,28 +229,30 @@ export default class CartesianPlane {
     // Set ratio factor from  wheel movement direction
     const delta = e.deltaY > 0 ? 0.95 : 1.05;
 
-    // Change scale accordingly to difference factor
-    this.scaleFactor *= delta;
+    if (this.rangeMultiplier < 2000 || delta < 1) {
+      // Change scale accordingly to difference factor
+      this.scaleFactor *= delta;
 
-    // Calculate scale ratio from initial scale
-    let ratio;
-    if (this.scaleFactor >= this.initialScaleFactor) {
-      ratio = Math.floor(this.scaleFactor / this.initialScaleFactor);
-    } else {
-      ratio = 1 / Math.floor(this.initialScaleFactor / this.scaleFactor);
+      // Calculate scale ratio from initial scale
+      let ratio;
+      if (this.scaleFactor >= this.initialScaleFactor) {
+        ratio = Math.floor(this.scaleFactor / this.initialScaleFactor);
+      } else {
+        ratio = 1 / Math.floor(this.initialScaleFactor / this.scaleFactor);
+      }
+      this.setRangeMultiplier(ratio);
+
+      // Set translation components proportionally to ratio factor
+      const dx = center.x * (1 - delta);
+      const dy = center.y * (1 - delta);
+
+      // Translate the origin with translation vector
+      this.origin.x += dx;
+      this.origin.y -= dy;
+
+      this.setRange();
     }
-    this.setRangeMultiplier(ratio);
-
-    // Set translation components proportionally to ratio factor
-    const dx = center.x * (1 - delta);
-    const dy = center.y * (1 - delta);
-
-    // Translate the origin with translation vector
-    this.origin.x += dx;
-    this.origin.y -= dy;
-
-    this.setRange();
-    this.drawPlane();
+    requestAnimationFrame(this.drawPlane.bind(this));
   }
 
   translatePlane(e: MouseEvent) {
@@ -234,7 +279,7 @@ export default class CartesianPlane {
         this.origin.x += dx;
         this.origin.y += dy;
         this.setRange();
-        this.drawPlane();
+        requestAnimationFrame(this.drawPlane.bind(this));
 
         // Stop movement and remove event listener when mouse is out the canvas or up
         ['mouseup', 'mouseout'].forEach((event) => {
