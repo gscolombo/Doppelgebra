@@ -5,7 +5,6 @@ export default class CartesianPlane {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private origin: Coordinates;
-  private initialOrigin: Coordinates;
   private scaleFactor: number;
   private initialRange: number;
   private initialScaleFactor: number;
@@ -18,7 +17,6 @@ export default class CartesianPlane {
     this.ctx = this.canvas.getContext('2d');
 
     const dpr = window.devicePixelRatio * 1;
-    const rect = this.canvas.getBoundingClientRect();
 
     this.canvas.width = innerWidth * dpr;
     this.canvas.height = innerHeight * dpr;
@@ -26,12 +24,10 @@ export default class CartesianPlane {
     this.canvas.style.width = innerWidth + 'px';
     this.canvas.style.height = innerHeight + 'px';
 
-    const startOrigin = {
+    this.origin = {
       x: this.canvas.width / (2 * dpr),
       y: this.canvas.height / (2 * dpr),
     };
-
-    this.origin = this.initialOrigin = startOrigin;
 
     this.initialRange = 5;
     this.range = {
