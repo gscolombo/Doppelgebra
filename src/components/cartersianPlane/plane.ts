@@ -25,8 +25,8 @@ export default class CartesianPlane {
     this.canvas.style.height = innerHeight + 'px';
 
     this.origin = {
-      x: this.canvas.width / (2 * dpr),
-      y: this.canvas.height / (2 * dpr),
+      x: Math.floor(this.canvas.width / (2 * dpr)) - 0.5,
+      y: Math.floor(this.canvas.height / (2 * dpr)) + 0.5,
     };
 
     this.initialRange = 5;
@@ -132,10 +132,17 @@ export default class CartesianPlane {
         const xPos = this.origin.x + x * this.scaleFactor;
         const text = this.getMarkerLabel(x, spacing, precision);
         const textWidth = this.ctx.measureText(text).width;
+        const textHeight = this.ctx.measureText(text).fontBoundingBoxAscent;
+
+        const posCorrection =
+          innerHeight -
+            Math.max(innerHeight, this.origin.y + 10 + textHeight) ||
+          -Math.min(0, this.origin.y + 20 - textHeight);
+
         const renderParams = [
           text,
           xPos - textWidth / 2,
-          this.origin.y + 20,
+          this.origin.y + 20 + posCorrection,
         ] as const;
 
         this.ctx.fillRect(xPos, this.origin.y - 5, 1, 10);
@@ -151,9 +158,13 @@ export default class CartesianPlane {
         const text = this.getMarkerLabel(-y, spacing, precision);
         const textWidth = this.ctx.measureText(text).width;
 
+        const posCorrection =
+          innerWidth - Math.max(innerWidth, this.origin.x) ||
+          -Math.min(0, this.origin.x - textWidth - 15);
+
         const renderParams = [
           text,
-          this.origin.x - textWidth - 10,
+          this.origin.x - textWidth - 10 + posCorrection,
           yPos + 5,
         ] as const;
 
