@@ -1,35 +1,34 @@
+import Utils from '../../utils/utils';
+import FunctionPlot from '../plot/plot';
 import Coordinates from './models/coordinates';
 import Range from './models/range';
 
 export default class CartesianPlane {
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private origin: Coordinates;
-  private scaleFactor: number;
-  private initialRange: number;
-  private initialScaleFactor: number;
-  private scaleRatio: number = 1;
-  private range: { x: Range; y: Range };
-  private rangeMultiplier: number = 1;
+  public canvas: HTMLCanvasElement;
+  public ctx: CanvasRenderingContext2D;
+  public origin: Coordinates;
+  public scaleFactor: number;
+  public initialRange: number;
+  public initialScaleFactor: number;
+  public scaleRatio: number = 1;
+  public range: { x: Range; y: Range };
+  public rangeMod: number = 1;
+  public plots: FunctionPlot[];
 
-  constructor(canvasID: string) {
+  constructor(canvasID: string, expressions: string[]) {
     this.canvas = document.getElementById(canvasID) as HTMLCanvasElement;
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d', { alpha: false });
+    const dpr = window.devicePixelRatio * 1.25;
 
-    const dpr = window.devicePixelRatio * 1;
+    this.initialRange = 5;
 
-    this.canvas.width = innerWidth * dpr;
-    this.canvas.height = innerHeight * dpr;
-    this.ctx.scale(dpr, dpr);
-    this.canvas.style.width = innerWidth + 'px';
-    this.canvas.style.height = innerHeight + 'px';
+    Utils.configureCanvas(this.canvas, this.ctx, dpr);
 
     this.origin = {
       x: Math.floor(this.canvas.width / (2 * dpr)) - 0.5,
       y: Math.floor(this.canvas.height / (2 * dpr)) + 0.5,
     };
 
-    this.initialRange = 5;
     this.range = {
       x: { min: -this.initialRange, max: this.initialRange },
       y: { min: -this.initialRange, max: this.initialRange },
@@ -38,8 +37,23 @@ export default class CartesianPlane {
     this.scaleFactor = this.initialScaleFactor =
       this.canvas.width / (this.initialRange * 2 * dpr);
 
-    this.canvas.addEventListener('mousedown', this.translatePlane.bind(this));
+    const translatePlane = this.translatePlane.bind(this);
+    this.canvas.addEventListener('mousedown', translatePlane);
     this.canvas.addEventListener('wheel', this.scalePlane.bind(this));
+
+    this.plots = expressions.map(
+      (expr) =>
+        new FunctionPlot(
+          expr,
+          this.canvas,
+          this.ctx,
+          this.origin,
+          this.range,
+          this.rangeMod,
+          this.scaleFactor,
+          'red'
+        )
+    );
 
     // Initial draw
     requestAnimationFrame(this.drawPlane.bind(this));
@@ -48,10 +62,19 @@ export default class CartesianPlane {
   drawPlane() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+    // Background
+    this.ctx.fillStyle = 'white';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
     this.drawGrid(undefined, '#555', 1.0);
     this.drawGrid(5); // Subgrid
     this.drawAxes();
     this.drawMarkers();
+
+    this.plots.forEach((plt) => {
+      plt.scaleFactor = this.scaleFactor;
+      plt.plot();
+    });
   }
 
   drawAxes() {
@@ -71,49 +94,32 @@ export default class CartesianPlane {
   }
 
   drawGrid(divisions?: number, color?: string, width?: number) {
-    const gridSize = 1 / (divisions ?? 1) / this.rangeMultiplier;
+    const gridSize = 1 / (divisions ?? 1) / this.rangeMod;
 
     // Styling
     this.ctx.strokeStyle = color ?? '#bbb';
     this.ctx.lineWidth = width ?? 0.5;
 
+    this.ctx.beginPath();
     // Vertical grid lines
     for (let x = this.range.x.min; x <= this.range.x.max; x += gridSize) {
       const xPos = this.origin.x + x * this.scaleFactor;
-      this.ctx.beginPath();
       this.ctx.moveTo(xPos, 0);
       this.ctx.lineTo(xPos, this.canvas.height);
-      this.ctx.stroke();
     }
 
     // Horizontal grid lines
-    for (let y = this.range.y.max; y >= this.range.y.min; y -= gridSize) {
-      const yPos = this.origin.y + y * this.scaleFactor;
-      this.ctx.beginPath();
+    for (let y = this.range.y.min; y <= this.range.y.max; y += gridSize) {
+      const yPos = this.origin.y - y * this.scaleFactor;
       this.ctx.moveTo(0, yPos);
       this.ctx.lineTo(this.canvas.width, yPos);
-      this.ctx.stroke();
     }
-  }
-
-  getMarkerLabel(n: number, spacing: number, precision: number) {
-    let exponential: boolean;
-
-    // Set labels of big numbers to scientific notation
-    if (spacing >= 1) {
-      exponential =
-        spacing.toString().length >= 6 ||
-        n.toString().replace('-', '').length >= 6;
-      return exponential ? n.toExponential() : n.toFixed(precision);
-    }
-    return n.toFixed(precision);
+    this.ctx.stroke();
   }
 
   drawMarkers() {
     let spacing =
-      this.rangeMultiplier < 1
-        ? Math.ceil(1 / this.rangeMultiplier)
-        : 1 / this.rangeMultiplier;
+      this.rangeMod < 1 ? Math.ceil(1 / this.rangeMod) : 1 / this.rangeMod;
 
     // Styling
     this.ctx.lineWidth = 3;
@@ -130,7 +136,7 @@ export default class CartesianPlane {
     for (let x = this.range.x.min; x <= this.range.x.max; x += spacing) {
       if (Math.abs(x) >= 10 ** -10) {
         const xPos = this.origin.x + x * this.scaleFactor;
-        const text = this.getMarkerLabel(x, spacing, precision);
+        const text = Utils.getMarkerLabel(x, spacing, precision);
         const textWidth = this.ctx.measureText(text).width;
         const textHeight = this.ctx.measureText(text).fontBoundingBoxAscent;
 
@@ -152,10 +158,10 @@ export default class CartesianPlane {
     }
 
     // Y-axis labels
-    for (let y = this.range.y.max; y >= this.range.y.min; y -= spacing) {
+    for (let y = this.range.y.min; y <= this.range.y.max; y += spacing) {
       if (Math.abs(y) >= 10 ** -10) {
-        const yPos = this.origin.y + y * this.scaleFactor;
-        const text = this.getMarkerLabel(-y, spacing, precision);
+        const yPos = this.origin.y - y * this.scaleFactor;
+        const text = Utils.getMarkerLabel(y, spacing, precision);
         const textWidth = this.ctx.measureText(text).width;
 
         const posCorrection =
@@ -175,56 +181,6 @@ export default class CartesianPlane {
     }
   }
 
-  setRangeMultiplier(ratio: number) {
-    let magnitude;
-    if (ratio !== this.scaleRatio) {
-      if (ratio > 1.75 * this.rangeMultiplier) {
-        magnitude = Math.log10(this.rangeMultiplier / 2);
-        this.scaleRatio = ratio;
-        this.rangeMultiplier *= 2;
-        if (Number.isInteger(magnitude)) {
-          this.rangeMultiplier += 10 ** magnitude;
-          this.rangeMultiplier = Number(
-            this.rangeMultiplier.toFixed(Math.abs(magnitude))
-          );
-        }
-      }
-      if (ratio < this.rangeMultiplier / 1.75) {
-        magnitude = Math.log10(this.rangeMultiplier * 2);
-        this.scaleRatio = ratio;
-        this.rangeMultiplier /= 2;
-        if (Number.isInteger(magnitude)) {
-          this.rangeMultiplier =
-            1 / (1 / this.rangeMultiplier + 10 ** -magnitude);
-        }
-      }
-    }
-  }
-
-  setRange() {
-    // Recalculate range based on the origin canvas position and current range multiplier
-    const ds =
-      this.rangeMultiplier < 1
-        ? Math.ceil(1 / this.rangeMultiplier)
-        : 1 / this.rangeMultiplier;
-
-    const leftEndpointX =
-      Math.floor(-this.origin.x / ds / this.scaleFactor) * ds;
-    const rightEndpointX =
-      Math.ceil((this.canvas.width - this.origin.x) / ds / this.scaleFactor) *
-      ds;
-    const leftEndpointY =
-      Math.floor(-this.origin.y / ds / this.scaleFactor) * ds;
-    const rightEndpointY =
-      Math.ceil((this.canvas.height - this.origin.y) / ds / this.scaleFactor) *
-      ds;
-
-    this.range.x.min = leftEndpointX;
-    this.range.x.max = rightEndpointX;
-    this.range.y.min = leftEndpointY;
-    this.range.y.max = rightEndpointY;
-  }
-
   scalePlane(e: WheelEvent) {
     e.preventDefault();
     // Get cursor position
@@ -236,7 +192,7 @@ export default class CartesianPlane {
     // Set ratio factor from  wheel movement direction
     const delta = e.deltaY > 0 ? 0.95 : 1.05;
 
-    if (this.rangeMultiplier < 2000 || delta < 1) {
+    if (this.rangeMod < 2000 || delta < 1) {
       // Change scale accordingly to difference factor
       this.scaleFactor *= delta;
 
@@ -247,7 +203,11 @@ export default class CartesianPlane {
       } else {
         ratio = 1 / Math.floor(this.initialScaleFactor / this.scaleFactor);
       }
-      this.setRangeMultiplier(ratio);
+      [this.rangeMod, this.scaleRatio] = Utils.setRangeMod(
+        ratio,
+        this.scaleRatio,
+        this.rangeMod
+      );
 
       // Set translation components proportionally to ratio factor
       const dx = center.x * (1 - delta);
@@ -257,7 +217,13 @@ export default class CartesianPlane {
       this.origin.x += dx;
       this.origin.y -= dy;
 
-      this.setRange();
+      // Update range interval
+      Utils.setRange(this.rangeMod, this.origin, this.range, this.scaleFactor);
+      this.plots.forEach(
+        (plot) => {
+          // TODO: update coordinates according to scale changes
+        }
+      );
     }
     requestAnimationFrame(this.drawPlane.bind(this));
   }
@@ -285,7 +251,17 @@ export default class CartesianPlane {
         const dy = newCenter.y - center.y;
         this.origin.x += dx;
         this.origin.y += dy;
-        this.setRange();
+
+        // Update range interval
+        Utils.setRange(this.rangeMod, this.origin, this.range, this.scaleFactor);
+
+        // Update coordinates array for each plot 
+        // (adds new coordinates according to the new range)
+        this.plots.forEach((plot) => {
+          plot.coordinates = plot.coordinates.map(([x, y]) => [x + dx, y + dy]);
+          plot.updateCoordinates();
+        });
+
         requestAnimationFrame(this.drawPlane.bind(this));
 
         // Stop movement and remove event listener when mouse is out the canvas or up
