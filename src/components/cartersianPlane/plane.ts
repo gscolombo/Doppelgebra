@@ -219,11 +219,13 @@ export default class CartesianPlane {
 
       // Update range interval
       Utils.setRange(this.rangeMod, this.origin, this.range, this.scaleFactor);
-      this.plots.forEach(
-        (plot) => {
-          // TODO: update coordinates according to scale changes
-        }
-      );
+
+      // Clear abscissas and coordinates arrays to recalculate with new scale factor
+      this.plots.forEach((plot) => {
+        plot.rangeMod = this.rangeMod;
+        plot.abscissas = [];
+        plot.coordinates = [];
+      });
     }
     requestAnimationFrame(this.drawPlane.bind(this));
   }
@@ -253,9 +255,14 @@ export default class CartesianPlane {
         this.origin.y += dy;
 
         // Update range interval
-        Utils.setRange(this.rangeMod, this.origin, this.range, this.scaleFactor);
+        Utils.setRange(
+          this.rangeMod,
+          this.origin,
+          this.range,
+          this.scaleFactor
+        );
 
-        // Update coordinates array for each plot 
+        // Update coordinates array for each plot
         // (adds new coordinates according to the new range)
         this.plots.forEach((plot) => {
           plot.coordinates = plot.coordinates.map(([x, y]) => [x + dx, y + dy]);
