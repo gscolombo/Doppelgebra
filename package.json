@@ -12,9 +12,14 @@
   "author": "Gabriel S. Colombo",
   "license": "ISC",
   "devDependencies": {
+    "@types/lodash": "^4.14.202",
+    "lodash": "^4.17.21",
     "ts-loader": "^9.5.0",
     "typescript": "^5.2.2",
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "mathjs": "^12.3.2"
   }
 }

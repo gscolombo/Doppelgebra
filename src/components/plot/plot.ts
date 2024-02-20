@@ -1,11 +1,13 @@
+import Utils from '../../utils/utils';
 import Coordinates from '../cartersianPlane/models/coordinates';
 import Range from '../cartersianPlane/models/range';
 import { last, mean, round, sortedIndexBy } from 'lodash';
+import { EvalFunction, compile } from 'mathjs';
 
 export default class FunctionPlot {
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
-  public expression: string;
+  public f: EvalFunction;
   public _scaleFactor: number;
   public origin: Coordinates;
   public range: { x: Range; y: Range };
@@ -30,8 +32,8 @@ export default class FunctionPlot {
     this.range = range;
     this.rangeMod = rangeMod;
     this.scaleFactor = scale;
-    this.expression = expression.replace('y=', '');
     this.color = color;
+    this.f = compile(expression.replace('y=', ''));
   }
 
   get scaleFactor() {
@@ -72,8 +74,8 @@ export default class FunctionPlot {
   }
 
   derivativeAt(x: number, h: number): number {
-    const y = Math.sin(2 * x) * Math.cos(4 * x) + Math.sin(x);
-    const dy = Math.sin(2 * (x + h)) * Math.cos(4 * (x + h)) + Math.sin(x + h);
+    const y = this.f.evaluate({ x: x });
+    const dy = this.f.evaluate({ x: x + h });
     return dy && y ? (dy - y) / h : null;
   }
 
@@ -84,8 +86,8 @@ export default class FunctionPlot {
   }
 
   curvatureAt(x: number): number {
-    const dy = this.derivativeAt(x, 0.0001);
-    const ddy = this.secondDerivativeAt(x, 0.0001);
+    const dy = this.derivativeAt(x, 0.00001);
+    const ddy = this.secondDerivativeAt(x, 0.00001);
     return Math.abs(ddy) / (1 + dy ** 2) ** (3 / 2);
   }
 
@@ -97,13 +99,10 @@ export default class FunctionPlot {
     while (x <= max) {
       x = round(x, 5);
       (start ? abscissas : this.abscissas).push(x);
-      const y = Math.sin(2 * x) * Math.cos(4 * x) + Math.sin(x);
+      const y = this.f.evaluate({ x: x });
       (start ? coordinates : this.coordinates).push(this.getCoordinate(x, y));
 
-      x += this.getStep(
-        this.curvatureAt(x + 1 / 2000),
-        this.curvatureAt(x + 1 / 5)
-      );
+      x += this.getStep(this.curvatureAt(x + 1 / 5000));
     }
 
     if (start) {
@@ -126,16 +125,13 @@ export default class FunctionPlot {
     while (x <= this.range.x.max) {
       x = round(x, 5);
       this.abscissas.push(x);
-      const y = Math.sin(2 * x) * Math.cos(4 * x) + Math.sin(x);
+      const y = this.f.evaluate({ x: x });
       const [xp, yp] = this.getCoordinate(x, y);
       this.coordinates.push([xp, yp]);
       if (x === this.range.x.min) this.ctx.moveTo(xp, yp);
       else this.ctx.lineTo(xp, yp);
 
-      x += this.getStep(
-        this.curvatureAt(x + 1 / 2000),
-        this.curvatureAt(x + 1 / 5)
-      );
+      x += this.getStep(this.curvatureAt(x + 1 / 5000));
     }
   }
 
@@ -146,8 +142,7 @@ export default class FunctionPlot {
     );
   }
 
-  getStep(k1: number, k2: number): number {
-    const k = mean([k1, k2]);
+  getStep(k: number): number {
     let step: number;
     if (k >= 10) step = 1 / 2000;
     else if (k >= 5 && k < 10) step = 1 / 1000;

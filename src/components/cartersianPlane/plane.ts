@@ -41,9 +41,9 @@ export default class CartesianPlane {
     this.canvas.addEventListener('mousedown', translatePlane);
     this.canvas.addEventListener('wheel', this.scalePlane.bind(this));
 
-    this.plots = expressions.map(
-      (expr) =>
-        new FunctionPlot(
+    this.plots = expressions.map((expr, i) => {
+      if (expr)
+        return new FunctionPlot(
           expr,
           this.canvas,
           this.ctx,
@@ -51,9 +51,9 @@ export default class CartesianPlane {
           this.range,
           this.rangeMod,
           this.scaleFactor,
-          'red'
-        )
-    );
+          i ? 'blue' : 'red'
+        );
+    });
 
     // Initial draw
     requestAnimationFrame(this.drawPlane.bind(this));
@@ -72,8 +72,10 @@ export default class CartesianPlane {
     this.drawMarkers();
 
     this.plots.forEach((plt) => {
-      plt.scaleFactor = this.scaleFactor;
-      plt.plot();
+      if (plt) {
+        plt.scaleFactor = this.scaleFactor;
+        plt.plot();
+      }
     });
   }
 
@@ -222,9 +224,11 @@ export default class CartesianPlane {
 
       // Clear abscissas and coordinates arrays to recalculate with new scale factor
       this.plots.forEach((plot) => {
-        plot.rangeMod = this.rangeMod;
-        plot.abscissas = [];
-        plot.coordinates = [];
+        if (plot) {
+          plot.rangeMod = this.rangeMod;
+          plot.abscissas = [];
+          plot.coordinates = [];
+        }
       });
     }
     requestAnimationFrame(this.drawPlane.bind(this));
@@ -265,8 +269,13 @@ export default class CartesianPlane {
         // Update coordinates array for each plot
         // (adds new coordinates according to the new range)
         this.plots.forEach((plot) => {
-          plot.coordinates = plot.coordinates.map(([x, y]) => [x + dx, y + dy]);
-          plot.updateCoordinates();
+          if (plot) {
+            plot.coordinates = plot.coordinates.map(([x, y]) => [
+              x + dx,
+              y + dy,
+            ]);
+            plot.updateCoordinates();
+          }
         });
 
         requestAnimationFrame(this.drawPlane.bind(this));
