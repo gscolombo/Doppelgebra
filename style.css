@@ -1,0 +1,54 @@
+* {
+  margin: 0;
+  overflow: hidden;
+}
+
+.inputs-container {
+  position: absolute;
+  top: 10vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: fit-content;
+  margin-left: 10vh;
+  z-index: 2;
+  background-color: white;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid black;
+}
+
+.inputs-container p {
+  font-size: 1.25rem;
+  font-family: 'Cambria';
+  font-weight: 600;
+  color: black;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  padding: 5px;
+  border-radius: 5px;
+  border: 1px solid black;
+}
+
+.field label,
+.field input {
+  font-family: 'Cambria';
+  font-size: 1.2rem;
+  font-style: italic;
+}
+
+.field input {
+  padding: 5px 5px 5px 2px;
+  border-radius: 5px;
+  border: none;
+  outline: none;
+}
+
+canvas {
+  position: absolute;
+  z-index: 1;
+}

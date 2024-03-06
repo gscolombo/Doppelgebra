@@ -1,10 +1,22 @@
-import CartesianPlane from "./components/cartersianPlane/plane";
+import CartesianPlane from './components/cartersianPlane/plane';
+import { debounce } from 'lodash';
 
-const canvas = document.getElementById('canvas') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-canvas.width = innerWidth - 75;
-canvas.height = innerHeight - 75;
-ctx.translate(canvas.width / 2, canvas.height / 2);
-ctx.scale(1,-1);
+let f: string, g: string, plane: CartesianPlane;
+document.querySelectorAll('.field').forEach((field) => {
+  field.addEventListener(
+    'input',
+    debounce((e: InputEvent) => {
+      const expr = (e.target as HTMLInputElement).value;
+      switch (field.id) {
+        case 'f':
+          f = expr;
+          break;
+        case 'g':
+          g = expr;
+      }
+      plane.updatePlots([f, g]);
+    }, 1000)
+  );
+});
 
-let plane = new CartesianPlane(canvas, ctx);
+plane = new CartesianPlane('plane', [f, g]);

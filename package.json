@@ -6,14 +6,20 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "webpack -w --mode development",
-    "build": "webpack --mode production"
+    "build": "webpack --mode production",
+    "deploy": "git push & git checkout main & npm run build | git commit -a --allow-empty-message & git push & git checkout develop"
   },
   "author": "Gabriel S. Colombo",
   "license": "ISC",
   "devDependencies": {
+    "@types/lodash": "^4.14.202",
+    "lodash": "^4.17.21",
     "ts-loader": "^9.5.0",
     "typescript": "^5.2.2",
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "mathjs": "^12.3.2"
   }
 }
