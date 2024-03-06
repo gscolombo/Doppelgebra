@@ -41,19 +41,7 @@ export default class CartesianPlane {
     this.canvas.addEventListener('mousedown', translatePlane);
     this.canvas.addEventListener('wheel', this.scalePlane.bind(this));
 
-    this.plots = expressions.map((expr, i) => {
-      if (expr)
-        return new FunctionPlot(
-          expr,
-          this.canvas,
-          this.ctx,
-          this.origin,
-          this.range,
-          this.rangeMod,
-          this.scaleFactor,
-          i ? 'blue' : 'red'
-        );
-    });
+    this.updatePlots(expressions);
 
     // Initial draw
     requestAnimationFrame(this.drawPlane.bind(this));
@@ -226,8 +214,11 @@ export default class CartesianPlane {
       this.plots.forEach((plot) => {
         if (plot) {
           plot.rangeMod = this.rangeMod;
-          plot.abscissas = [];
-          plot.coordinates = [];
+          plot.coordinates = plot.coordinates.map((_, i) => [
+            plot.abscissas[i] * this.scaleFactor + this.origin.x,
+            -plot.ordinates[i] * this.scaleFactor + this.origin.y,
+          ]);
+          plot.updateCoordinates();
         }
       });
     }
@@ -293,5 +284,22 @@ export default class CartesianPlane {
       },
       { signal: signalController.signal }
     );
+  }
+
+  updatePlots(expressions: string[]) {
+    this.plots = expressions.map((expr, i) => {
+      if (expr)
+        return new FunctionPlot(
+          expr,
+          this.canvas,
+          this.ctx,
+          this.origin,
+          this.range,
+          this.rangeMod,
+          this.scaleFactor,
+          i ? 'blue' : 'red'
+        );
+    });
+    window.requestAnimationFrame(this.drawPlane.bind(this));
   }
 }

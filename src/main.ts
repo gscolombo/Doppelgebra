@@ -1,7 +1,7 @@
 import CartesianPlane from './components/cartersianPlane/plane';
 import { debounce } from 'lodash';
 
-let f: string, g: string;
+let f: string, g: string, plane: CartesianPlane;
 document.querySelectorAll('.field').forEach((field) => {
   field.addEventListener(
     'input',
@@ -14,9 +14,9 @@ document.querySelectorAll('.field').forEach((field) => {
         case 'g':
           g = expr;
       }
-      new CartesianPlane('plane', [f, g]);
+      plane.updatePlots([f, g]);
     }, 1000)
   );
 });
 
-new CartesianPlane('plane', [f, g]);
+plane = new CartesianPlane('plane', [f, g]);

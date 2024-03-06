@@ -1,20 +1,24 @@
-import Utils from '../../utils/utils';
 import Coordinates from '../cartersianPlane/models/coordinates';
 import Range from '../cartersianPlane/models/range';
-import { last, mean, round, sortedIndexBy } from 'lodash';
-import { EvalFunction, compile } from 'mathjs';
+import { inRange, last, round, sortedIndexBy } from 'lodash';
+import { EvalFunction, MathNode, abs, compile, derivative, isComplex, parse } from 'mathjs';
 
 export default class FunctionPlot {
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
-  public f: EvalFunction;
   public _scaleFactor: number;
-  public origin: Coordinates;
-  public range: { x: Range; y: Range };
+  public _origin: Coordinates;
   public _rangeMod: number;
-  public color: string;
+  public range: { x: Range; y: Range };
   public abscissas: number[] = [];
+  public ordinates: number[] = [];
   public coordinates: [number, number][] = [];
+  public color: string;
+
+  private f: EvalFunction;
+  private y: MathNode;
+  private dy: MathNode;
+  private onlyPositive = false;
 
   constructor(
     expression: string,
@@ -33,7 +37,18 @@ export default class FunctionPlot {
     this.rangeMod = rangeMod;
     this.scaleFactor = scale;
     this.color = color;
-    this.f = compile(expression.replace('y=', ''));
+
+    const expr = expression.replace('y=', '');
+    this.f = compile(expr);
+    this.dy = derivative(parse(expr), 'x');
+  }
+
+  get origin() {
+    return this._origin;
+  }
+
+  set origin(o: Coordinates) {
+    this._origin = o;
   }
 
   get scaleFactor() {
@@ -58,102 +73,104 @@ export default class FunctionPlot {
     if (!this.coordinates.length) {
       this.firstPlotting();
     } else {
-      this.filterCoordinates().forEach(([x, y], i) => {
-        if (!i) this.ctx.moveTo(x, y);
-        else this.ctx.lineTo(x, y);
-      });
+      this.plotOverRange();
     }
     this.ctx.stroke();
   }
 
   getCoordinate(x: number, y: number): [number, number] {
     return [
-      x * this.scaleFactor + this.origin.x,
-      -y * this.scaleFactor + this.origin.y,
+      round(x * this.scaleFactor + this.origin.x, 4),
+      round(-y * this.scaleFactor + this.origin.y, 4),
     ];
   }
 
-  derivativeAt(x: number, h: number): number {
-    const y = this.f.evaluate({ x: x });
-    const dy = this.f.evaluate({ x: x + h });
-    return dy && y ? (dy - y) / h : null;
-  }
-
-  secondDerivativeAt(x: number, h: number): number {
-    const dy = this.derivativeAt(x, h);
-    const ddy = this.derivativeAt(x + h, h);
-    return dy && ddy ? (ddy - dy) / h : null;
-  }
-
-  curvatureAt(x: number): number {
-    const dy = this.derivativeAt(x, 0.00001);
-    const ddy = this.secondDerivativeAt(x, 0.00001);
-    return Math.abs(ddy) / (1 + dy ** 2) ** (3 / 2);
-  }
-
-  addCoordinates(min: number, max: number, start: boolean): void {
-    const coordinates: [number, number][] = [];
-    const abscissas: number[] = [];
-
-    let x = min;
-    while (x <= max) {
-      x = round(x, 5);
-      (start ? abscissas : this.abscissas).push(x);
-      const y = this.f.evaluate({ x: x });
-      (start ? coordinates : this.coordinates).push(this.getCoordinate(x, y));
-
-      x += this.getStep(this.curvatureAt(x + 1 / 5000));
-    }
-
-    if (start) {
-      this.abscissas = abscissas.concat(this.abscissas);
-      this.coordinates = coordinates.concat(this.coordinates);
-    }
-  }
-
   updateCoordinates(): void {
-    if (this.range.x.min < this.abscissas[0]) {
-      this.addCoordinates(this.range.x.min, this.abscissas[0], true);
+    let min: number, max: number, rtl: boolean;
+    if (this.range.x.min < this.abscissas[0] && !this.onlyPositive) {
+      min = this.range.x.min;
+      max = this.abscissas[0];
+      rtl = true;
+    } else if (last(this.abscissas) < this.range.x.max) {
+      min = last(this.abscissas);
+      max = this.range.x.max;
+      rtl = false;
     }
-    if (this.abscissas[this.abscissas.length - 1] < this.range.x.max) {
-      this.addCoordinates(last(this.abscissas), this.range.x.max, false);
-    }
+    this.calculateSegments(min, max, rtl, false);
   }
 
+  // TODO: improve plot resolution while keeping performance
   firstPlotting(): void {
-    let x = this.range.x.min;
-    while (x <= this.range.x.max) {
-      x = round(x, 5);
-      this.abscissas.push(x);
-      const y = this.f.evaluate({ x: x });
-      const [xp, yp] = this.getCoordinate(x, y);
-      this.coordinates.push([xp, yp]);
-      if (x === this.range.x.min) this.ctx.moveTo(xp, yp);
-      else this.ctx.lineTo(xp, yp);
+    let x = this.range.x.min, y = this.f.evaluate({x: x});
+    if (isComplex(y)) x = this.range.x.min = 0, y = this.f.evaluate({x: x}), this.onlyPositive = true;
 
-      x += this.getStep(this.curvatureAt(x + 1 / 5000));
+    this.ctx.moveTo(...this.updateArrays(x, y));
+    this.calculateSegments(x, this.range.x.max, false, true);
+  }
+
+  plotOverRange(): void {
+    const start = sortedIndexBy(this.abscissas, this.range.x.min);
+    const end = sortedIndexBy(this.abscissas, this.range.x.max);
+
+    let x: number, y: number, xp: number, yp: number, wasOutOfRange: boolean;
+    let f = this.rangeMod <= 1 ? 1 / this.rangeMod : 1;
+    for (let i = start; i < end; i++) {
+      x = this.abscissas[i]; 
+      y = this.ordinates[i];
+      [xp, yp] = this.coordinates[i];
+
+      if (!inRange(y, this.range.y.min - f, this.range.y.max + f) && isFinite(y)) {
+        wasOutOfRange = true;
+        continue;
+      };
+
+      if (!isFinite(y)) {
+        yp = this.getCoordinate(x, this.range.y[y < 0 ? 'min' : 'max'])[1];
+        this.ctx.moveTo(xp, yp);
+        this.ctx.lineTo(...this.coordinates[i + 1]);
+        continue;
+      };
+      
+      if (i === start || wasOutOfRange) this.ctx.moveTo(xp, yp);
+      else this.ctx.lineTo(xp, yp);
+      wasOutOfRange = !inRange(y, this.range.y.min - f, this.range.y.max + f);
     }
   }
 
-  filterCoordinates(): [number, number][] {
-    return this.coordinates.slice(
-      sortedIndexBy(this.abscissas, this.range.x.min),
-      sortedIndexBy(this.abscissas, this.range.x.max)
-    );
+  updateArrays(x: number, y: number, ltr = false): [number, number] {
+    let [xp, yp] = this.getCoordinate(x, y);
+    if (ltr) {
+      this.abscissas.unshift(x);
+      this.ordinates.unshift(y);
+      this.coordinates.unshift([xp, yp]);
+    } else {
+      this.abscissas.push(x);
+      this.ordinates.push(y);
+      this.coordinates.push([xp, yp]);
+    }
+    return [xp, yp];
   }
 
-  getStep(k: number): number {
-    let step: number;
-    if (k >= 10) step = 1 / 2000;
-    else if (k >= 5 && k < 10) step = 1 / 1000;
-    else if (k >= 1 && k < 5) step = 1 / 500;
-    else if (k >= 0.5 && k < 1) step = 1 / 200;
-    else if (k >= 0.1 && k < 0.5) step = 1 / 100;
-    else if (k >= 0.01 && k < 0.1) step = 1 / 50;
-    else if (k >= 0.001 && k < 0.01) step = 1 / 20;
-    else if (k >= 0.0001 && k < 0.001) step = 1 / 10;
-    else step = 1 / 5;
+  calculateSegments(min: number, max: number, rtl: boolean, draw: boolean) {
+    let error = (y: number, L: number) => abs(y - L);
+    let tgline = (x: number, a: number) => this.f.evaluate({x: a}) + (this.dy.evaluate({x: a}))*(x - a) || 0;
 
-    return step / (this.rangeMod <= 1 ? this.rangeMod : 1);
+    const increment = 1 / 1000 * (this.rangeMod <= 1 ? 1 / this.rangeMod : 1);
+    let xp: number, yp: number, a: number, y: number, x = rtl ? max : min, wasOutOfRange: boolean;
+    a = x;
+    while (rtl ? x >= min : x <= max) {
+      x += increment * (rtl ? -1 : 1);
+      x = round(x, 4);
+      y = this.f.evaluate({x: x});
+      if (error(y, tgline(x, a)) > 0.001 || !isFinite(y)) {
+        [xp, yp] = this.updateArrays(x, y, rtl);
+        if (draw && inRange(y, this.range.y.min, this.range.y.max + 1 / this.rangeMod)) {
+          if (wasOutOfRange) this.ctx.moveTo(xp, yp);
+          else this.ctx.lineTo(xp, yp);
+        }
+        a = x;
+        wasOutOfRange = !inRange(y, this.range.y.min, this.range.y.max + 1 / this.rangeMod);
+      }
+    }
   }
 }

@@ -1,5 +1,7 @@
+import { EvalFunction, MathNode, derivative } from 'mathjs';
 import Coordinates from '../components/cartersianPlane/models/coordinates';
 import Range from '../components/cartersianPlane/models/range';
+import { round } from 'lodash';
 
 export default class Utils {
   static configureCanvas(
@@ -30,10 +32,10 @@ export default class Utils {
       Math.floor((origin.y - innerHeight) / ds / scaleFactor) * ds;
     const rightEndpointY = Math.ceil(origin.y / ds / scaleFactor) * ds;
 
-    range.x.min = leftEndpointX;
-    range.x.max = rightEndpointX;
-    range.y.min = leftEndpointY;
-    range.y.max = rightEndpointY;
+    range.x.min = round(leftEndpointX, 4);
+    range.x.max = round(rightEndpointX, 4);
+    range.y.min = round(leftEndpointY, 4);
+    range.y.max = round(rightEndpointY, 4);
   }
 
   static setRangeMod(
@@ -75,5 +77,9 @@ export default class Utils {
       return exponential ? n.toExponential() : n.toFixed(precision);
     }
     return n.toFixed(precision);
+  }
+
+  static curvatureAt(x: number, dy: MathNode, ddy: MathNode): number {
+    return Math.abs(ddy.evaluate({x: x})) / (1 + dy.evaluate({x: x}) ** 2) ** (3 / 2);
   }
 }
