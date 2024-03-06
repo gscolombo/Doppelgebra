@@ -182,7 +182,7 @@ export default class CartesianPlane {
     // Set ratio factor from  wheel movement direction
     const delta = e.deltaY > 0 ? 0.95 : 1.05;
 
-    if (this.rangeMod < 2000 || delta < 1) {
+    if ((this.rangeMod < 2000 || delta < 1) && (this.plots.every(plt => plt ? plt.renderCount < 10000 : true) || delta > 1)) {
       // Change scale accordingly to difference factor
       this.scaleFactor *= delta;
 

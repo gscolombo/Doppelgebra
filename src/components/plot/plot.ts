@@ -14,6 +14,7 @@ export default class FunctionPlot {
   public ordinates: number[] = [];
   public coordinates: [number, number][] = [];
   public color: string;
+  public renderCount = 0;
 
   private f: EvalFunction;
   private dy: MathNode;
@@ -86,7 +87,7 @@ export default class FunctionPlot {
 
   updateCoordinates(): void {
     let min: number, max: number, rtl: boolean;
-    if (this.range.x.min < this.abscissas[0]) {
+    if (this.range.x.min < this.abscissas[0] && !this.onlyPositive) {
       min = this.range.x.min;
       max = this.abscissas[0];
       rtl = true;
@@ -102,7 +103,7 @@ export default class FunctionPlot {
   // TODO: improve plot resolution while keeping performance
   firstPlotting(): void {
     let x = this.range.x.min, y = this.f.evaluate({x: x});
-    if (isComplex(y)) x = this.range.x.min = 0, y = this.f.evaluate({x: x});
+    if (isComplex(y)) x = 0, y = this.f.evaluate({x: x}), this.onlyPositive = true;
 
     this.ctx.moveTo(...this.updateArrays(x, y));
     this.calculateSegments(x, this.range.x.max, false, true);
@@ -114,6 +115,7 @@ export default class FunctionPlot {
 
     let x: number, y: number, xp: number, yp: number, wasOutOfRange: boolean;
     let f = this.rangeMod <= 1 ? 1 / this.rangeMod : 1;
+    this.renderCount = 0;
     for (let i = start; i < end; i++) {
       x = this.abscissas[i]; 
       y = this.ordinates[i];
@@ -122,19 +124,22 @@ export default class FunctionPlot {
       if (!inRange(y, this.range.y.min - f, this.range.y.max + f) && isFinite(y)) {
         wasOutOfRange = true;
         continue;
-      };
+      }
 
       if (!isFinite(y)) {
         yp = this.getCoordinate(x, this.range.y[y < 0 ? 'min' : 'max'])[1];
         this.ctx.moveTo(xp, yp);
         this.ctx.lineTo(...this.coordinates[i + 1]);
+        this.renderCount++;
         continue;
       };
       
       if (i === start || wasOutOfRange) this.ctx.moveTo(xp, yp);
       else this.ctx.lineTo(xp, yp);
       wasOutOfRange = !inRange(y, this.range.y.min - f, this.range.y.max + f);
+      this.renderCount++;
     }
+    if (this.renderCount > 10000) this.renderCount = 10000;
   }
 
   updateArrays(x: number, y: number, ltr = false): [number, number] {
@@ -158,7 +163,8 @@ export default class FunctionPlot {
     const increment = 1 / 1000 * (this.rangeMod <= 1 ? 1 / this.rangeMod : 1);
     let xp: number, yp: number, a: number, y: number, x = rtl ? max : min, wasOutOfRange: boolean;
     a = x;
-    while ((rtl ? x >= min : x <= max) && (x !== undefined && a !== undefined)) {
+    this.renderCount = 0;
+    while (rtl ? x >= min : x <= max) {
       x += increment * (rtl ? -1 : 1);
       x = round(x, 4);
       y = this.f.evaluate({x: x});
@@ -167,6 +173,7 @@ export default class FunctionPlot {
         if (draw && inRange(y, this.range.y.min, this.range.y.max + 1 / this.rangeMod)) {
           if (wasOutOfRange) this.ctx.moveTo(xp, yp);
           else this.ctx.lineTo(xp, yp);
+          this.renderCount++;
         }
         a = x;
         wasOutOfRange = !inRange(y, this.range.y.min, this.range.y.max + 1 / this.rangeMod);
@@ -176,6 +183,7 @@ export default class FunctionPlot {
       x = rtl ? min : max;
       y = this.f.evaluate({x: x});
       this.ctx.lineTo(...this.updateArrays(x, y, rtl));
+      this.renderCount++;
     }
   }
 }
