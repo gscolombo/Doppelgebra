@@ -16,7 +16,6 @@ export default class FunctionPlot {
   public color: string;
 
   private f: EvalFunction;
-  private y: MathNode;
   private dy: MathNode;
   private onlyPositive = false;
 
@@ -87,7 +86,7 @@ export default class FunctionPlot {
 
   updateCoordinates(): void {
     let min: number, max: number, rtl: boolean;
-    if (this.range.x.min < this.abscissas[0] && !this.onlyPositive) {
+    if (this.range.x.min < this.abscissas[0]) {
       min = this.range.x.min;
       max = this.abscissas[0];
       rtl = true;
@@ -96,13 +95,14 @@ export default class FunctionPlot {
       max = this.range.x.max;
       rtl = false;
     }
-    this.calculateSegments(min, max, rtl, false);
+    if (min !== undefined && max !== undefined)
+      this.calculateSegments(min, max, rtl, false);
   }
 
   // TODO: improve plot resolution while keeping performance
   firstPlotting(): void {
     let x = this.range.x.min, y = this.f.evaluate({x: x});
-    if (isComplex(y)) x = this.range.x.min = 0, y = this.f.evaluate({x: x}), this.onlyPositive = true;
+    if (isComplex(y)) x = this.range.x.min = 0, y = this.f.evaluate({x: x});
 
     this.ctx.moveTo(...this.updateArrays(x, y));
     this.calculateSegments(x, this.range.x.max, false, true);
@@ -153,12 +153,12 @@ export default class FunctionPlot {
 
   calculateSegments(min: number, max: number, rtl: boolean, draw: boolean) {
     let error = (y: number, L: number) => abs(y - L);
-    let tgline = (x: number, a: number) => this.f.evaluate({x: a}) + (this.dy.evaluate({x: a}))*(x - a) || 0;
+    let tgline = (x: number, a: number) => (this.f.evaluate({x: a}) + (this.dy.evaluate({x: a}))*(x - a)) || 0;
 
     const increment = 1 / 1000 * (this.rangeMod <= 1 ? 1 / this.rangeMod : 1);
     let xp: number, yp: number, a: number, y: number, x = rtl ? max : min, wasOutOfRange: boolean;
     a = x;
-    while (rtl ? x >= min : x <= max) {
+    while ((rtl ? x >= min : x <= max) && (x !== undefined && a !== undefined)) {
       x += increment * (rtl ? -1 : 1);
       x = round(x, 4);
       y = this.f.evaluate({x: x});
@@ -171,6 +171,11 @@ export default class FunctionPlot {
         a = x;
         wasOutOfRange = !inRange(y, this.range.y.min, this.range.y.max + 1 / this.rangeMod);
       }
+    }
+    if (round(y, 3) === round(tgline(x, a), 3)) {
+      x = rtl ? min : max;
+      y = this.f.evaluate({x: x});
+      this.ctx.lineTo(...this.updateArrays(x, y, rtl));
     }
   }
 }
